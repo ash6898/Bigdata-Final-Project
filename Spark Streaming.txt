@@ -1,0 +1,171 @@
+spark-shell --master local --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+
+
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._ 
+
+
+val articleSchema = new StructType()
+ .add("Author", "string")
+ .add("Title", "string")
+ .add("Description", "string")
+ .add("Url", "string")
+ .add("UrlToImage", "string")
+ .add("PublishedAt", "string")
+ .add("Content", "string")
+ .add("Source.id", "string")
+ .add("Source.name", "string")
+
+
+// Read streaming data
+val articles = spark.readStream.format("json")
+ .schema(articleSchema)
+ .option("path", "hdfs:///final_assignment/")
+ .load()
+  
+
+// Add a timestamp column
+val articleStreamWithTimestamp = articles.withColumn("event_time", current_timestamp())
+
+
+// Apply watermark
+val watermarkedStream = articleStreamWithTimestamp.withWatermark("event_time", "1 minute")
+
+
+// Group by window and Author
+val article_group = watermarkedStream.groupBy(window(col("event_time"), "1 minute"), col("Author")).count
+
+// Create key-value pairs
+val article_key_val = article_group.withColumn("key", lit(100))
+ .select(col("key").cast("string"), concat(col("Author"), lit(" "), col("count")).alias("value"))
+
+
+//update output mode
+val stream = article_key_val.writeStream
+ .format("json")
+ .option("kafka.bootstrap.servers", "localhost:9092")
+ .option("topic", "newsapi-sink")
+ .option("path", "file:////home/aakashguru6898/final_assignment/stream_output")
+ .option("checkpointLocation", "file:////home/aakashguru6898/chkpt")
+ .outputMode("append")
+ .start()
+
+
+article_key_val.writeStream.outputMode("append").format("console").start()
+
+
+
+
+
+
+
+
+
+
+
+## UPDATE MODE STREAMING WITHOUT WATERMARK ##
+
+
+(Fill this in)
+
+
+
+
+## UPDATE MODE STREAMING WITH WATERMARK ##
+
+
+Trigger 1 - no threshold
+
+
+
+
+Trigger 2 - 2015-02-23 10:39
+
+
+
+
+Trigger 3 - 2015-02-23 10:46 
+
+
+
+
+#### MIN EVENT_TIME ###
+
+
+-- We can check minimum event times as follows (FYI only)
+
+
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._ 
+
+
+val userSchema = new StructType()
+ .add("Arrival_Time", "string")
+ .add("Creation_Time", "string")
+ .add("Device", "string")
+ .add("gt", "string")
+
+
+val iot_2 = spark.read.format("json")
+ .schema(userSchema)
+ .option("path", "hdfs:///BigData/4-bike.json")
+ .load()
+
+
+val iot_event_time_2 = iot_2.withColumn("event_time", (col("Creation_Time").cast("double")/1000000000).cast("timestamp"))
+
+
+val min_event_time = iot_event_time_2.agg(min("event_time"))
+val max_event_time = iot_event_time_2.agg(max("event_time"))
+
+
+min_event_time.show()
+max_event_time.show()
+
+
+### COMPLETE MODE STREAMING WITH WATERMARK ###
+
+
+// watermark has no effect on complete output mode
+// But let's confirm this
+// restart everything (stop Kafka listening, get out Spark shell, delete checkpoint, start Spark, start Kafka topic)
+
+
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._ 
+
+
+val userSchema = new StructType()
+ .add("Arrival_Time", "string")
+ .add("Creation_Time", "string")
+ .add("Device", "string").add("gt", "string")
+
+
+val iot = spark.readStream.format("json")
+ .schema(userSchema)
+ .option("path", "s3a://activity-data")
+ .load()
+
+
+val iot_event_time = iot.withColumn("event_time", (col("Creation_Time").cast("double")/1000000000).cast("timestamp"))
+
+
+val iot_group_win = iot_event_time
+ .withWatermark("event_time", "10 minutes")
+ .groupBy(window(col("event_time"), "5 minutes"))
+ .count() 
+
+
+val iot_key_val = iot_group_win.withColumn("key", lit(100))
+ .select(col("key").cast("string"), concat(col("window.start").cast("string"), lit(" to "), col("window.end").cast("string"), lit(" "), col("count")).alias("value"))
+
+
+val stream = iot_key_val.writeStream
+ .format("kafka")
+ .option("kafka.bootstrap.servers", "localhost:9092")
+ .option("topic", "iot-sink")
+ .option("checkpointLocation", "file:////home/saber/chkpt")
+ .outputMode("complete")
+ .start()
+ 
+

@@ -17,7 +17,6 @@ def get_api_data(base_url, query_params, topic, producer):
                 print('------ fetching done ------')
                 producer.send('fetch_done'.encode('utf-8'))
                 producer.flush()
-                producer.close()
                 break
             
                         
@@ -40,14 +39,13 @@ def get_api_data(base_url, query_params, topic, producer):
             print('----- api limit reached -----')
             producer.send(topic, 'fetch_done'.encode('utf-8'))
             producer.flush()
-            producer.close()
             
         else:
             print(f"HTTP Error Code: {status_code}")
     
 
 # Kafka producer configuration
-topic = "BigData-console-topic"
+topic = "newsapi-sink"
 brokers = "localhost:9092"
 
 api_key = "eba6f01a1f994b548927a88c1dc8b45a"
@@ -56,7 +54,7 @@ query_params = {
     "q": "football",
     "sortBy": "popularity",
     "apiKey": api_key,
-    "pageSize": 100,
+    "pageSize": 50,
     "page": 1
 }
 
