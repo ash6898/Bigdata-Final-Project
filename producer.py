@@ -2,6 +2,7 @@ from kafka.producer import KafkaProducer
 import requests
 import json
 import time
+import os
 
 def get_api_data(base_url, query_params, topic, producer):
     try:
@@ -48,7 +49,9 @@ def get_api_data(base_url, query_params, topic, producer):
 topic = "newsapi-sink"
 brokers = "localhost:9092"
 
-api_key = "eba6f01a1f994b548927a88c1dc8b45a"
+api_key = os.environ.get("NEWS_API_KEY")
+if not api_key:
+    raise SystemExit("NEWS_API_KEY environment variable is not set. Get a key from https://newsapi.org and export NEWS_API_KEY before running producer.py.")
 base_url = "https://newsapi.org/v2/everything"
 query_params = {
     "q": "football",
